@@ -28,9 +28,11 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
       _dosagemController.text = widget.medicamento!.dosagem ?? '';
       for (var horario in widget.medicamento!.horarios) {
         final parts = horario.split(':');
-        _horarios.add(
-          TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
-        );
+        if (parts.length == 2) {
+          _horarios.add(
+            TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+          );
+        }
       }
     }
   }
@@ -59,7 +61,6 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
     if (time != null) {
       setState(() {
         _horarios.add(time);
-        // Opcional: ordenar os horários
         _horarios.sort(
           (a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute),
         );
@@ -80,7 +81,15 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
   }
 
   Future<void> _salvarMedicamento() async {
-    if (_formKey.currentState!.validate() && _horarios.isNotEmpty) {
+    if (!_formKey.currentState!.validate()) return;
+    if (_horarios.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Adicione pelo menos um horário')),
+      );
+      return;
+    }
+
+    try {
       final novoMedicamento = Medicamento(
         id: widget.medicamento?.id,
         nome: _nomeController.text.trim(),
@@ -96,35 +105,41 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
       } else {
         id = novoMedicamento.id!;
         await DatabaseHelper.instance.updateMedicamento(novoMedicamento);
-        // Cancelar notificações antigas para evitar duplicidade ou horários removidos
-        // Assumindo um limite seguro de 20 notificações por medicamento para limpeza
-        for (int i = 0; i < 20; i++) {
-          await NotificationService.instance.cancelNotification(id * 100 + i);
+        // Limpar notificações antigas
+        try {
+          for (int i = 0; i < 20; i++) {
+            await NotificationService.instance.cancelNotification(id * 100 + i);
+          }
+        } catch (e) {
+          print("Erro ao limpar notificações: $e");
         }
       }
 
-      // Agendar novas notificações
-      for (int i = 0; i < _horarios.length; i++) {
-        final time = _horarios[i];
-        final now = DateTime.now();
-        var scheduledDate = DateTime(
-          now.year,
-          now.month,
-          now.day,
-          time.hour,
-          time.minute,
-        );
+      // Agendar notificações (Agora passando apenas Hora e Minuto)
+      try {
+        for (int i = 0; i < _horarios.length; i++) {
+          final time = _horarios[i];
 
-        if (scheduledDate.isBefore(now)) {
-          scheduledDate = scheduledDate.add(const Duration(days: 1));
+          await NotificationService.instance.scheduleNotification(
+            id: id * 100 + i,
+            title: 'Hora do remédio! 💊',
+            body: '${novoMedicamento.nome} - ${novoMedicamento.dosagem ?? ""}',
+            hour: time.hour, // Passa hora direta
+            minute: time.minute, // Passa minuto direto
+          );
         }
-
-        await NotificationService.instance.scheduleNotification(
-          id: id * 100 + i,
-          title: 'Hora do remédio! 💊',
-          body: '${novoMedicamento.nome} - ${novoMedicamento.dosagem ?? ""}',
-          scheduledTime: scheduledDate,
-        );
+      } catch (e) {
+        print("Erro agendamento: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              // Mostra o erro real para facilitar o debug
+              content: Text('Salvo, mas erro no alarme: $e'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
 
       if (mounted) {
@@ -132,17 +147,24 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
           SnackBar(
             content: Text(
               widget.medicamento == null
-                  ? 'Medicamento cadastrado com sucesso!'
-                  : 'Medicamento atualizado com sucesso!',
+                  ? 'Medicamento cadastrado!'
+                  : 'Medicamento atualizado!',
             ),
+            backgroundColor: Colors.green,
           ),
         );
         Navigator.pop(context, true);
       }
-    } else if (_horarios.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Adicione pelo menos um horário')),
-      );
+    } catch (e) {
+      print("Erro crítico: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao salvar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
