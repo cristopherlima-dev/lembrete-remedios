@@ -5,11 +5,13 @@ import '../models/medicamento.dart';
 class MedicamentoCard extends StatelessWidget {
   final Medicamento medicamento;
   final VoidCallback onDelete;
+  final VoidCallback onEdit; // Novo callback para edição
 
   const MedicamentoCard({
     super.key,
     required this.medicamento,
     required this.onDelete,
+    required this.onEdit, // Adicionado ao construtor
   });
 
   @override
@@ -60,35 +62,47 @@ class MedicamentoCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Confirmar exclusão'),
-                        content: Text(
-                          'Deseja realmente excluir ${medicamento.nome}?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onDelete();
-                            },
-                            child: const Text(
-                              'Excluir',
-                              style: TextStyle(color: Colors.red),
+                // Botões de Ação
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      tooltip: 'Editar',
+                      onPressed: onEdit,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      tooltip: 'Excluir',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Confirmar exclusão'),
+                            content: Text(
+                              'Deseja realmente excluir ${medicamento.nome}?',
                             ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancelar'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  onDelete();
+                                },
+                                child: const Text(
+                                  'Excluir',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

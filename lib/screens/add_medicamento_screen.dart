@@ -6,7 +6,9 @@ import '../database/database_helper.dart';
 import '../services/notification_service.dart';
 
 class AddMedicamentoScreen extends StatefulWidget {
-  const AddMedicamentoScreen({super.key});
+  final Medicamento? medicamento;
+
+  const AddMedicamentoScreen({super.key, this.medicamento});
 
   @override
   State<AddMedicamentoScreen> createState() => _AddMedicamentoScreenState();
@@ -17,6 +19,21 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
   final _nomeController = TextEditingController();
   final _dosagemController = TextEditingController();
   final List<TimeOfDay> _horarios = [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.medicamento != null) {
+      _nomeController.text = widget.medicamento!.nome;
+      _dosagemController.text = widget.medicamento!.dosagem ?? '';
+      for (var horario in widget.medicamento!.horarios) {
+        final parts = horario.split(':');
+        _horarios.add(
+          TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1])),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -42,6 +59,10 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
     if (time != null) {
       setState(() {
         _horarios.add(time);
+        // Opcional: ordenar os horários
+        _horarios.sort(
+          (a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute),
+        );
       });
     }
   }
@@ -60,15 +81,29 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
 
   Future<void> _salvarMedicamento() async {
     if (_formKey.currentState!.validate() && _horarios.isNotEmpty) {
-      final medicamento = Medicamento(
+      final novoMedicamento = Medicamento(
+        id: widget.medicamento?.id,
         nome: _nomeController.text.trim(),
         dosagem: _dosagemController.text.trim(),
         horarios: _horarios.map(_formatTimeOfDay).toList(),
+        ativo: widget.medicamento?.ativo ?? true,
+        dataCriacao: widget.medicamento?.dataCriacao,
       );
 
-      final id = await DatabaseHelper.instance.insertMedicamento(medicamento);
+      int id;
+      if (widget.medicamento == null) {
+        id = await DatabaseHelper.instance.insertMedicamento(novoMedicamento);
+      } else {
+        id = novoMedicamento.id!;
+        await DatabaseHelper.instance.updateMedicamento(novoMedicamento);
+        // Cancelar notificações antigas para evitar duplicidade ou horários removidos
+        // Assumindo um limite seguro de 20 notificações por medicamento para limpeza
+        for (int i = 0; i < 20; i++) {
+          await NotificationService.instance.cancelNotification(id * 100 + i);
+        }
+      }
 
-      // Agendar notificações para cada horário
+      // Agendar novas notificações
       for (int i = 0; i < _horarios.length; i++) {
         final time = _horarios[i];
         final now = DateTime.now();
@@ -80,22 +115,27 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
           time.minute,
         );
 
-        // Se o horário já passou hoje, agenda para amanhã
         if (scheduledDate.isBefore(now)) {
           scheduledDate = scheduledDate.add(const Duration(days: 1));
         }
 
         await NotificationService.instance.scheduleNotification(
-          id: id * 100 + i, // ID único para cada horário
+          id: id * 100 + i,
           title: 'Hora do remédio! 💊',
-          body: '${medicamento.nome} - ${medicamento.dosagem ?? ""}',
+          body: '${novoMedicamento.nome} - ${novoMedicamento.dosagem ?? ""}',
           scheduledTime: scheduledDate,
         );
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Medicamento cadastrado com sucesso!')),
+          SnackBar(
+            content: Text(
+              widget.medicamento == null
+                  ? 'Medicamento cadastrado com sucesso!'
+                  : 'Medicamento atualizado com sucesso!',
+            ),
+          ),
         );
         Navigator.pop(context, true);
       }
@@ -110,7 +150,11 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Adicionar Medicamento'),
+        title: Text(
+          widget.medicamento == null
+              ? 'Adicionar Medicamento'
+              : 'Editar Medicamento',
+        ),
         backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
       ),
@@ -197,9 +241,11 @@ class _AddMedicamentoScreenState extends State<AddMedicamentoScreen> {
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: const Text(
-                'Salvar Medicamento',
-                style: TextStyle(fontSize: 16),
+              child: Text(
+                widget.medicamento == null
+                    ? 'Salvar Medicamento'
+                    : 'Atualizar Medicamento',
+                style: const TextStyle(fontSize: 16),
               ),
             ),
           ],

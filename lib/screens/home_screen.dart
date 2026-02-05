@@ -84,6 +84,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     medicamento: _medicamentos[index],
                     onDelete: () =>
                         _deleteMedicamento(_medicamentos[index].id!),
+                    onEdit: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AddMedicamentoScreen(
+                            medicamento: _medicamentos[index],
+                          ),
+                        ),
+                      );
+                      if (result == true) {
+                        _loadMedicamentos();
+                      }
+                    },
                   );
                 },
               ),

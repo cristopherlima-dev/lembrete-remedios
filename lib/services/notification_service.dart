@@ -1,4 +1,5 @@
 // lib/services/notification_service.dart
+import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -50,13 +51,16 @@ class NotificationService {
       title,
       body,
       tz.TZDateTime.from(scheduledTime, tz.local),
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'medicamento_channel',
+          'medicamento_channel_v2', // MUDANÇA AQUI: Alterado para v2 para forçar atualização
           'Lembretes de Medicamentos',
           channelDescription: 'Notificações para lembrar de tomar medicamentos',
           importance: Importance.high,
           priority: Priority.high,
+          enableVibration: true,
+          // Padrão: espera 0ms, vibra 1000ms, pausa 500ms, vibra 1000ms, pausa 500ms, vibra 1000ms
+          vibrationPattern: Int64List.fromList([0, 1000, 500, 1000, 500, 1000]),
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
